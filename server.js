@@ -28,12 +28,25 @@ if (!fs.existsSync(uploadsDir)){
 }
 
 // ========== MONGODB CONNECTION ==========
-mongoose.connect(process.env.MONGO_URI, {
-  useNewUrlParser: true,
-  useUnifiedTopology: true,
-})
+const mongoose = require('mongoose');
+
+// Remove deprecated options - use this simpler connection
+mongoose.connect(process.env.MONGO_URI)
   .then(() => console.log('✅ MongoDB connected successfully'))
-  .catch(err => console.log('❌ MongoDB connection error:', err));
+  .catch(err => console.error('❌ MongoDB connection error:', err));
+
+// Add connection event handlers
+mongoose.connection.on('connected', () => {
+  console.log('✅ Mongoose connected to MongoDB');
+});
+
+mongoose.connection.on('error', (err) => {
+  console.error('❌ Mongoose connection error:', err);
+});
+
+mongoose.connection.on('disconnected', () => {
+  console.log('⚠️ Mongoose disconnected from MongoDB');
+});
 
 // ========== SCHEMAS ==========
 
