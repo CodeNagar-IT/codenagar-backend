@@ -28,7 +28,6 @@ if (!fs.existsSync(uploadsDir)){
 }
 
 // ========== MONGODB CONNECTION ==========
-const mongoose = require('mongoose');
 
 // Remove deprecated options - use this simpler connection
 mongoose.connect(process.env.MONGO_URI)
