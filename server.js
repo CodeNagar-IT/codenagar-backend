@@ -802,7 +802,7 @@ app.post('/api/careers/send-email', adminAuth, async (req, res) => {
     `;
     
     const mailOptions = {
-      from: `"CodeNagar HR" <${process.env.EMAIL_USER}>`,
+      from: `"CodeNagar HR" <${process.env.EMAIL_FROM}>`, // info@codenagar.com
       to: to,
       subject: subject,
       text: body,
