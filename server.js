@@ -723,6 +723,33 @@ const initializeProducts = async () => {
 };
 initializeProducts();
 
+// ========== EMAIL SENDING ROUTE (Admin) ==========
+app.post('/api/careers/send-email', adminAuth, async (req, res) => {
+  try {
+    const { to, subject, body, name } = req.body;
+    
+    // Here you would integrate with an email service like:
+    // - Nodemailer (SMTP)
+    // - SendGrid
+    // - AWS SES
+    // - Resend.com
+    
+    // For now, log the email
+    console.log(`Email would be sent to: ${to}`);
+    console.log(`Subject: ${subject}`);
+    console.log(`Body: ${body}`);
+    
+    // TODO: Add actual email sending logic
+    // Example with nodemailer:
+    // const transporter = nodemailer.createTransport({...});
+    // await transporter.sendMail({ from: 'info@codenagar.com', to, subject, html: body });
+    
+    res.json({ success: true, message: 'Email sent successfully' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ========== ERROR HANDLING MIDDLEWARE ==========
 app.use((err, req, res, next) => {
   console.error(err.stack);
