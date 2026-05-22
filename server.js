@@ -133,7 +133,20 @@ const careerSchema = new mongoose.Schema({
   status: { type: String, default: 'pending' },
   appliedAt: { type: Date, default: Date.now }
 });
+const jobPositionSchema = new mongoose.Schema({
+  title: { type: String, required: true },
+  type: { type: String, required: true, enum: ['Full-time', 'Part-time', 'Contract', 'Remote'] },
+  location: { type: String, required: true },
+  salary: { type: String, required: true },
+  experience: { type: String, required: true },
+  description: { type: String, required: true },
+  requirements: [{ type: String }],
+  icon: { type: String, default: "💼" },
+  isActive: { type: Boolean, default: true },
+  createdAt: { type: Date, default: Date.now }
+});
 
+const JobPosition = mongoose.model('JobPosition', jobPositionSchema);
 // Event Schema
 const eventSchema = new mongoose.Schema({
   title: String,
@@ -618,6 +631,58 @@ app.get('/api/newsletter/subscribers', adminAuth, async (req, res) => {
 app.delete('/api/newsletter/:id', adminAuth, async (req, res) => {
   await Newsletter.findByIdAndDelete(req.params.id);
   res.json({ success: true });
+});
+
+// Get all active job positions
+app.get('/api/careers/positions', async (req, res) => {
+  try {
+    const positions = await JobPosition.find({ isActive: true }).sort({ createdAt: -1 });
+    res.json(positions);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Get single position
+app.get('/api/careers/positions/:id', async (req, res) => {
+  try {
+    const position = await JobPosition.findById(req.params.id);
+    if (!position) return res.status(404).json({ error: 'Position not found' });
+    res.json(position);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Create job position (Admin only)
+app.post('/api/careers/positions', adminAuth, async (req, res) => {
+  try {
+    const position = new JobPosition(req.body);
+    await position.save();
+    res.status(201).json(position);
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// Update job position (Admin only)
+app.put('/api/careers/positions/:id', adminAuth, async (req, res) => {
+  try {
+    const position = await JobPosition.findByIdAndUpdate(req.params.id, req.body, { new: true });
+    res.json(position);
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// Delete job position (Admin only)
+app.delete('/api/careers/positions/:id', adminAuth, async (req, res) => {
+  try {
+    await JobPosition.findByIdAndDelete(req.params.id);
+    res.json({ success: true });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
 });
 
 // ========== STATS ROUTE (Admin) ==========
