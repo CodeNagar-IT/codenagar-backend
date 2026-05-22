@@ -26,7 +26,30 @@ const uploadsDir = './uploads/resumes';
 if (!fs.existsSync(uploadsDir)){
   fs.mkdirSync(uploadsDir, { recursive: true });
 }
+const nodemailer = require('nodemailer');
 
+// Email transporter configuration
+const emailTransporter = nodemailer.createTransport({
+  host: process.env.EMAIL_HOST,
+  port: parseInt(process.env.EMAIL_PORT),
+  secure: process.env.EMAIL_SECURE === 'true', // true for port 465, false for 587
+  auth: {
+    user: process.env.EMAIL_USER,
+    pass: process.env.EMAIL_PASS,
+  },
+  tls: {
+    rejectUnauthorized: false, // Required for GoDaddy sometimes
+  },
+});
+
+// Verify email configuration on startup
+emailTransporter.verify((error, success) => {
+  if (error) {
+    console.error('❌ Email configuration error:', error);
+  } else {
+    console.log('✅ Email server ready to send messages');
+  }
+});
 // ========== MONGODB CONNECTION ==========
 
 // Remove deprecated options - use this simpler connection
@@ -747,6 +770,57 @@ app.post('/api/careers/send-email', adminAuth, async (req, res) => {
     res.json({ success: true, message: 'Email sent successfully' });
   } catch (err) {
     res.status(500).json({ error: err.message });
+  }
+});
+
+// ========== EMAIL SENDING ROUTE (Admin only) ==========
+app.post('/api/careers/send-email', adminAuth, async (req, res) => {
+  try {
+    const { to, subject, body, name } = req.body;
+    
+    if (!to || !subject || !body) {
+      return res.status(400).json({ error: 'Missing required fields' });
+    }
+    
+    // HTML version of the email for better formatting
+    const htmlBody = `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <div style="background: linear-gradient(135deg, #06b6d4 0%, #4f46e5 100%); padding: 20px; text-align: center;">
+          <h1 style="color: white; margin: 0;">CodeNagar</h1>
+        </div>
+        <div style="padding: 20px; background: #f9fafb;">
+          <p>Dear ${name},</p>
+          <div style="white-space: pre-wrap;">${body.replace(/\n/g, '<br>')}</div>
+          <br>
+          <p>Best regards,<br><strong>HR Team</strong><br>CodeNagar</p>
+        </div>
+        <div style="background: #1f2937; padding: 15px; text-align: center; color: #9ca3af; font-size: 12px;">
+          <p>&copy; 2025 CodeNagar. All rights reserved.</p>
+          <p>123 Tech Plaza, Shahrah-e-Faisal, Karachi, Pakistan</p>
+        </div>
+      </div>
+    `;
+    
+    const mailOptions = {
+      from: `"CodeNagar HR" <${process.env.EMAIL_USER}>`,
+      to: to,
+      subject: subject,
+      text: body,
+      html: htmlBody,
+      replyTo: process.env.EMAIL_USER,
+    };
+    
+    const info = await emailTransporter.sendMail(mailOptions);
+    console.log('Email sent:', info.messageId);
+    
+    res.json({ 
+      success: true, 
+      message: 'Email sent successfully',
+      messageId: info.messageId 
+    });
+  } catch (err) {
+    console.error('Email sending error:', err);
+    res.status(500).json({ error: err.message || 'Failed to send email' });
   }
 });
 
