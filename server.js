@@ -144,6 +144,28 @@ const contactSchema = new mongoose.Schema({
   createdAt: { type: Date, default: Date.now }
 });
 
+// Portfolio Schema
+const portfolioSchema = new mongoose.Schema({
+  title: { type: String, required: true },
+  slug: { type: String, required: true, unique: true },
+  category: { type: String, required: true, enum: ['Web Development', 'App Development', 'AI/ML', 'Cloud Solutions', 'E-commerce', 'UI/UX Design'] },
+  client: { type: String, required: true },
+  description: { type: String, required: true },
+  challenge: { type: String, required: true },
+  solution: { type: String, required: true },
+  results: [{ type: String }],
+  technologies: [{ type: String }],
+  image: { type: String, required: true },
+  gallery: [{ type: String }],
+  liveUrl: String,
+  githubUrl: String,
+  featured: { type: Boolean, default: false },
+  completedDate: { type: Date, required: true },
+  createdAt: { type: Date, default: Date.now }
+});
+
+const Portfolio = mongoose.model('Portfolio', portfolioSchema);
+
 // Career Application Schema
 const careerSchema = new mongoose.Schema({
   position: String,
@@ -708,6 +730,64 @@ app.delete('/api/careers/positions/:id', adminAuth, async (req, res) => {
   }
 });
 
+// ========== PORTFOLIO ROUTES ==========
+
+// Get all portfolio items (public)
+app.get('/api/portfolio', async (req, res) => {
+  try {
+    const { category, featured } = req.query;
+    let filter = {};
+    if (category && category !== 'all') filter.category = category;
+    if (featured === 'true') filter.featured = true;
+    const items = await Portfolio.find(filter).sort({ completedDate: -1 });
+    res.json(items);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Get single portfolio item
+app.get('/api/portfolio/:slug', async (req, res) => {
+  try {
+    const item = await Portfolio.findOne({ slug: req.params.slug });
+    if (!item) return res.status(404).json({ error: 'Portfolio item not found' });
+    res.json(item);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Create portfolio item (Admin only)
+app.post('/api/portfolio', adminAuth, async (req, res) => {
+  try {
+    const item = new Portfolio(req.body);
+    await item.save();
+    res.status(201).json(item);
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// Update portfolio item (Admin only)
+app.put('/api/portfolio/:id', adminAuth, async (req, res) => {
+  try {
+    const item = await Portfolio.findByIdAndUpdate(req.params.id, req.body, { new: true });
+    res.json(item);
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// Delete portfolio item (Admin only)
+app.delete('/api/portfolio/:id', adminAuth, async (req, res) => {
+  try {
+    await Portfolio.findByIdAndDelete(req.params.id);
+    res.json({ success: true });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
 // ========== STATS ROUTE (Admin) ==========
 app.get('/api/stats', adminAuth, async (req, res) => {
   const stats = {
@@ -718,7 +798,8 @@ app.get('/api/stats', adminAuth, async (req, res) => {
     messages: await Contact.countDocuments(),
     careers: await Career.countDocuments(),
     events: await Event.countDocuments(),
-    subscribers: await Newsletter.countDocuments()
+    subscribers: await Newsletter.countDocuments(),
+    portfolio: await Portfolio.countDocuments(),
   };
   res.json(stats);
 });
