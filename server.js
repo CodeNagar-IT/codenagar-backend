@@ -187,7 +187,24 @@ const jobPositionSchema = new mongoose.Schema({
   isActive: { type: Boolean, default: true },
   createdAt: { type: Date, default: Date.now }
 });
+// Service Inquiry Schema
+const serviceInquirySchema = new mongoose.Schema({
+  serviceName: { type: String, required: true },
+  serviceCategory: { type: String, required: true },
+  fullName: { type: String, required: true },
+  email: { type: String, required: true },
+  phone: { type: String, required: true },
+  company: { type: String, default: '' },
+  budget: { type: String, required: true },
+  currency: { type: String, default: 'USD' },
+  timeline: { type: String, required: true },
+  requirements: { type: String, required: true },
+  status: { type: String, default: 'pending' }, // pending, contacted, completed
+  read: { type: Boolean, default: false },
+  createdAt: { type: Date, default: Date.now }
+});
 
+const ServiceInquiry = mongoose.model('ServiceInquiry', serviceInquirySchema);
 // Event Schema
 const eventSchema = new mongoose.Schema({
   title: String,
@@ -778,6 +795,85 @@ app.post('/api/careers/send-email', adminAuth, async (req, res) => {
   }
 });
 
+// ========== SERVICE INQUIRY ROUTES ==========
+
+// Submit service inquiry (public)
+app.post('/api/service/inquiry', async (req, res) => {
+  try {
+    const inquiry = new ServiceInquiry(req.body);
+    await inquiry.save();
+    
+    // Optional: Send email notification to admin
+    // await sendEmailNotification(inquiry);
+    
+    res.status(201).json({ success: true, message: 'Inquiry submitted successfully! We will contact you soon.' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Get all service inquiries (Admin only)
+app.get('/api/service/inquiries', adminAuth, async (req, res) => {
+  try {
+    const inquiries = await ServiceInquiry.find().sort({ createdAt: -1 });
+    res.json(inquiries);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Get single inquiry (Admin only)
+app.get('/api/service/inquiry/:id', adminAuth, async (req, res) => {
+  try {
+    const inquiry = await ServiceInquiry.findById(req.params.id);
+    if (!inquiry) return res.status(404).json({ error: 'Inquiry not found' });
+    res.json(inquiry);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Update inquiry status (Admin only)
+app.put('/api/service/inquiry/:id/status', adminAuth, async (req, res) => {
+  try {
+    const { status, read } = req.body;
+    const inquiry = await ServiceInquiry.findByIdAndUpdate(
+      req.params.id, 
+      { status, read }, 
+      { new: true }
+    );
+    res.json(inquiry);
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// Delete inquiry (Admin only)
+app.delete('/api/service/inquiry/:id', adminAuth, async (req, res) => {
+  try {
+    await ServiceInquiry.findByIdAndDelete(req.params.id);
+    res.json({ success: true });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// Get stats for service inquiries (Admin only)
+app.get('/api/service/inquiries/stats', adminAuth, async (req, res) => {
+  try {
+    const stats = {
+      total: await ServiceInquiry.countDocuments(),
+      pending: await ServiceInquiry.countDocuments({ status: 'pending' }),
+      contacted: await ServiceInquiry.countDocuments({ status: 'contacted' }),
+      completed: await ServiceInquiry.countDocuments({ status: 'completed' }),
+      unread: await ServiceInquiry.countDocuments({ read: false }),
+    };
+    res.json(stats);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ========== STATS ROUTE (Admin) ==========
 app.get('/api/stats', adminAuth, async (req, res) => {
   const stats = {
@@ -791,6 +887,7 @@ app.get('/api/stats', adminAuth, async (req, res) => {
     subscribers: await Newsletter.countDocuments(),
     portfolio: await Portfolio.countDocuments(),
     jobs: await JobPosition.countDocuments(),
+    serviceInquiries: await ServiceInquiry.countDocuments(),
   };
   res.json(stats);
 });
