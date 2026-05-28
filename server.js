@@ -222,6 +222,53 @@ const eventSchema = new mongoose.Schema({
   }]
 });
 
+// FYP Project Schema
+const fypProjectSchema = new mongoose.Schema({
+  title: { type: String, required: true },
+  slug: { type: String, required: true, unique: true },
+  category: { type: String, required: true, enum: ['Web Development', 'App Development', 'AI/ML', 'Data Science', 'IoT', 'Game Development', 'Blockchain', 'Cloud Computing'] },
+  type: { type: String, required: true, enum: ['Project', 'Thesis', 'Report'] },
+  description: { type: String, required: true },
+  technologies: [{ type: String }],
+  features: [{ type: String }],
+  deliverables: [{ type: String }],
+  image: { type: String, required: true },
+  difficulty: { type: String, enum: ['Beginner', 'Intermediate', 'Advanced'], default: 'Intermediate' },
+  duration: { type: String, required: true },
+  price: { type: Number, required: true },
+  discountedPrice: { type: Number, required: true },
+  studentPrice: { type: Number, required: true },
+  originalPrice: { type: Number, required: true },
+  discountPercentage: { type: Number, default: 40 },
+  featured: { type: Boolean, default: false },
+  isActive: { type: Boolean, default: true },
+  createdAt: { type: Date, default: Date.now }
+});
+
+// FYP Inquiry Schema
+const fypInquirySchema = new mongoose.Schema({
+  projectId: { type: mongoose.Schema.Types.ObjectId, ref: 'FYPProject' },
+  projectTitle: { type: String, required: true },
+  projectType: { type: String, required: true },
+  fullName: { type: String, required: true },
+  email: { type: String, required: true },
+  phone: { type: String, required: true },
+  university: { type: String, required: true },
+  studentId: { type: String, required: true },
+  semester: { type: String, required: true },
+  program: { type: String, required: true },
+  requirements: { type: String, required: true },
+  deadline: { type: String, required: true },
+  budget: { type: String, required: true },
+  studentCard: { type: String }, // URL to uploaded student ID card
+  status: { type: String, default: 'pending' },
+  read: { type: Boolean, default: false },
+  createdAt: { type: Date, default: Date.now }
+});
+
+const FYPProject = mongoose.model('FYPProject', fypProjectSchema);
+const FYPInquiry = mongoose.model('FYPInquiry', fypInquirySchema);
+
 // Newsletter Schema
 const newsletterSchema = new mongoose.Schema({
   email: { type: String, unique: true },
@@ -874,6 +921,143 @@ app.get('/api/service/inquiries/stats', adminAuth, async (req, res) => {
   }
 });
 
+// ========== FYP PROJECTS ROUTES ==========
+
+// Get all FYP projects (public)
+app.get('/api/fyp/projects', async (req, res) => {
+  try {
+    const { category, type, featured } = req.query;
+    let filter = { isActive: true };
+    if (category && category !== 'all') filter.category = category;
+    if (type && type !== 'all') filter.type = type;
+    if (featured === 'true') filter.featured = true;
+    const projects = await FYPProject.find(filter).sort({ createdAt: -1 });
+    res.json(projects);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Get single FYP project
+app.get('/api/fyp/projects/:slug', async (req, res) => {
+  try {
+    const project = await FYPProject.findOne({ slug: req.params.slug });
+    if (!project) return res.status(404).json({ error: 'Project not found' });
+    res.json(project);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Create FYP project (Admin only)
+app.post('/api/fyp/projects', adminAuth, async (req, res) => {
+  try {
+    const project = new FYPProject(req.body);
+    await project.save();
+    res.status(201).json(project);
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// Update FYP project (Admin only)
+app.put('/api/fyp/projects/:id', adminAuth, async (req, res) => {
+  try {
+    const project = await FYPProject.findByIdAndUpdate(req.params.id, req.body, { new: true });
+    res.json(project);
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// Delete FYP project (Admin only)
+app.delete('/api/fyp/projects/:id', adminAuth, async (req, res) => {
+  try {
+    await FYPProject.findByIdAndDelete(req.params.id);
+    res.json({ success: true });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// ========== FYP INQUIRY ROUTES ==========
+
+// Submit FYP inquiry (public)
+app.post('/api/fyp/inquiry', upload.single('studentCard'), async (req, res) => {
+  try {
+    const inquiry = new FYPInquiry({
+      ...req.body,
+      studentCard: req.file ? req.file.path : null
+    });
+    await inquiry.save();
+    res.status(201).json({ success: true, message: 'Inquiry submitted successfully! We will contact you soon.' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Get all FYP inquiries (Admin only)
+app.get('/api/fyp/inquiries', adminAuth, async (req, res) => {
+  try {
+    const inquiries = await FYPInquiry.find().sort({ createdAt: -1 });
+    res.json(inquiries);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Get single inquiry (Admin only)
+app.get('/api/fyp/inquiry/:id', adminAuth, async (req, res) => {
+  try {
+    const inquiry = await FYPInquiry.findById(req.params.id);
+    if (!inquiry) return res.status(404).json({ error: 'Inquiry not found' });
+    res.json(inquiry);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Update inquiry status (Admin only)
+app.put('/api/fyp/inquiry/:id/status', adminAuth, async (req, res) => {
+  try {
+    const { status, read } = req.body;
+    const inquiry = await FYPInquiry.findByIdAndUpdate(
+      req.params.id, 
+      { status, read }, 
+      { new: true }
+    );
+    res.json(inquiry);
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// Delete inquiry (Admin only)
+app.delete('/api/fyp/inquiry/:id', adminAuth, async (req, res) => {
+  try {
+    await FYPInquiry.findByIdAndDelete(req.params.id);
+    res.json({ success: true });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// Get stats for FYP inquiries (Admin only)
+app.get('/api/fyp/inquiries/stats', adminAuth, async (req, res) => {
+  try {
+    const stats = {
+      total: await FYPInquiry.countDocuments(),
+      pending: await FYPInquiry.countDocuments({ status: 'pending' }),
+      contacted: await FYPInquiry.countDocuments({ status: 'contacted' }),
+      completed: await FYPInquiry.countDocuments({ status: 'completed' }),
+      unread: await FYPInquiry.countDocuments({ read: false }),
+    };
+    res.json(stats);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ========== STATS ROUTE (Admin) ==========
 app.get('/api/stats', adminAuth, async (req, res) => {
   const stats = {
@@ -887,6 +1071,8 @@ app.get('/api/stats', adminAuth, async (req, res) => {
     subscribers: await Newsletter.countDocuments(),
     portfolio: await Portfolio.countDocuments(),
     jobs: await JobPosition.countDocuments(),
+    fypProjects: await FYPProject.countDocuments(),
+fypInquiries: await FYPInquiry.countDocuments(),
     serviceInquiries: await ServiceInquiry.countDocuments(),
   };
   res.json(stats);
