@@ -989,24 +989,37 @@ app.delete('/api/fyp/projects/:id', adminAuth, async (req, res) => {
 // Submit FYP inquiry (public) - Updated to handle custom projects
 app.post('/api/fyp/inquiry', upload.single('studentCard'), async (req, res) => {
   try {
+    const isCustom = req.body.customProject === 'true';
+    
     const inquiryData = {
-      ...req.body,
+      fullName: req.body.fullName,
+      email: req.body.email,
+      phone: req.body.phone,
+      university: req.body.university,
+      studentId: req.body.studentId,
+      semester: req.body.semester,
+      program: req.body.program,
+      requirements: req.body.requirements,
+      deadline: req.body.deadline,
+      budget: req.body.budget,
       studentCard: req.file ? req.file.path : null,
-      isCustomProject: req.body.customProject === 'true' || false,
+      isCustomProject: isCustom,
       customCategory: req.body.customCategory || '',
       customTechnologies: req.body.customTechnologies || '',
     };
     
-    // If it's a custom project, set the projectType to 'Custom'
-    if (inquiryData.isCustomProject) {
+    if (isCustom) {
+      inquiryData.projectTitle = req.body.projectTitle || 'Custom Project Request';
       inquiryData.projectType = 'Custom';
+      inquiryData.projectId = null;
+    } else {
+      inquiryData.projectId = req.body.projectId || null;
+      inquiryData.projectTitle = req.body.projectTitle;
+      inquiryData.projectType = req.body.projectType;
     }
     
     const inquiry = new FYPInquiry(inquiryData);
     await inquiry.save();
-    
-    // Optional: Send email notification to admin about custom project
-    // await sendCustomProjectNotification(inquiry);
     
     res.status(201).json({ success: true, message: 'Inquiry submitted successfully! We will contact you soon.' });
   } catch (err) {
