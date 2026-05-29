@@ -246,7 +246,29 @@ const fypProjectSchema = new mongoose.Schema({
 });
 
 // FYP Inquiry Schema
-fypInquirySchema
+const fypInquirySchema = new mongoose.Schema({
+  projectId: { type: mongoose.Schema.Types.ObjectId, ref: 'FYPProject' },
+  projectTitle: { type: String, required: true },
+  projectType: { type: String, required: true },
+  fullName: { type: String, required: true },
+  email: { type: String, required: true },
+  phone: { type: String, required: true },
+  university: { type: String, required: true },
+  studentId: { type: String, required: true },
+  semester: { type: String, required: true },
+  program: { type: String, required: true },
+  requirements: { type: String, required: true },
+  deadline: { type: String, required: true },
+  budget: { type: String, required: true },
+  studentCard: { type: String },
+  status: { type: String, default: 'pending' },
+  read: { type: Boolean, default: false },
+  // Custom project fields
+  isCustomProject: { type: Boolean, default: false },
+  customCategory: { type: String, default: '' },
+  customTechnologies: { type: String, default: '' },
+  createdAt: { type: Date, default: Date.now }
+});
 
 const FYPProject = mongoose.model('FYPProject', fypProjectSchema);
 const FYPInquiry = mongoose.model('FYPInquiry', fypInquirySchema);
