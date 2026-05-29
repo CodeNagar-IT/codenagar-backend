@@ -246,25 +246,7 @@ const fypProjectSchema = new mongoose.Schema({
 });
 
 // FYP Inquiry Schema
-const fypInquirySchema = new mongoose.Schema({
-  projectId: { type: mongoose.Schema.Types.ObjectId, ref: 'FYPProject' },
-  projectTitle: { type: String, required: true },
-  projectType: { type: String, required: true },
-  fullName: { type: String, required: true },
-  email: { type: String, required: true },
-  phone: { type: String, required: true },
-  university: { type: String, required: true },
-  studentId: { type: String, required: true },
-  semester: { type: String, required: true },
-  program: { type: String, required: true },
-  requirements: { type: String, required: true },
-  deadline: { type: String, required: true },
-  budget: { type: String, required: true },
-  studentCard: { type: String }, // URL to uploaded student ID card
-  status: { type: String, default: 'pending' },
-  read: { type: Boolean, default: false },
-  createdAt: { type: Date, default: Date.now }
-});
+fypInquirySchema
 
 const FYPProject = mongoose.model('FYPProject', fypProjectSchema);
 const FYPInquiry = mongoose.model('FYPInquiry', fypInquirySchema);
@@ -982,16 +964,31 @@ app.delete('/api/fyp/projects/:id', adminAuth, async (req, res) => {
 
 // ========== FYP INQUIRY ROUTES ==========
 
-// Submit FYP inquiry (public)
+// Submit FYP inquiry (public) - Updated to handle custom projects
 app.post('/api/fyp/inquiry', upload.single('studentCard'), async (req, res) => {
   try {
-    const inquiry = new FYPInquiry({
+    const inquiryData = {
       ...req.body,
-      studentCard: req.file ? req.file.path : null
-    });
+      studentCard: req.file ? req.file.path : null,
+      isCustomProject: req.body.customProject === 'true' || false,
+      customCategory: req.body.customCategory || '',
+      customTechnologies: req.body.customTechnologies || '',
+    };
+    
+    // If it's a custom project, set the projectType to 'Custom'
+    if (inquiryData.isCustomProject) {
+      inquiryData.projectType = 'Custom';
+    }
+    
+    const inquiry = new FYPInquiry(inquiryData);
     await inquiry.save();
+    
+    // Optional: Send email notification to admin about custom project
+    // await sendCustomProjectNotification(inquiry);
+    
     res.status(201).json({ success: true, message: 'Inquiry submitted successfully! We will contact you soon.' });
   } catch (err) {
+    console.error('Error saving inquiry:', err);
     res.status(500).json({ error: err.message });
   }
 });
