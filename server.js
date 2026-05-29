@@ -991,7 +991,7 @@ app.post('/api/fyp/inquiry', upload.single('studentCard'), async (req, res) => {
   try {
     const isCustom = req.body.customProject === 'true';
     
-    const inquiryData = {
+    let inquiryData = {
       fullName: req.body.fullName,
       email: req.body.email,
       phone: req.body.phone,
@@ -1009,10 +1009,12 @@ app.post('/api/fyp/inquiry', upload.single('studentCard'), async (req, res) => {
     };
     
     if (isCustom) {
-      inquiryData.projectTitle = req.body.projectTitle || 'Custom Project Request';
+      // For custom projects - use customProjectTitle as projectTitle
+      inquiryData.projectTitle = req.body.projectTitle || req.body.customProjectTitle || 'Custom Project Request';
       inquiryData.projectType = 'Custom';
       inquiryData.projectId = null;
     } else {
+      // For regular projects
       inquiryData.projectId = req.body.projectId || null;
       inquiryData.projectTitle = req.body.projectTitle;
       inquiryData.projectType = req.body.projectType;
