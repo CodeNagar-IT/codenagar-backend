@@ -1009,8 +1009,8 @@ app.post('/api/fyp/inquiry', upload.single('studentCard'), async (req, res) => {
     };
     
     if (isCustom) {
-      // For custom projects - use customProjectTitle as projectTitle
-      inquiryData.projectTitle = req.body.projectTitle || req.body.customProjectTitle || 'Custom Project Request';
+      // For custom projects
+      inquiryData.projectTitle = req.body.projectTitle || 'Custom Project Request';
       inquiryData.projectType = 'Custom';
       inquiryData.projectId = null;
     } else {
@@ -1018,6 +1018,20 @@ app.post('/api/fyp/inquiry', upload.single('studentCard'), async (req, res) => {
       inquiryData.projectId = req.body.projectId || null;
       inquiryData.projectTitle = req.body.projectTitle;
       inquiryData.projectType = req.body.projectType;
+    }
+    
+    // Validate required fields
+    if (!inquiryData.projectTitle) {
+      return res.status(400).json({ error: 'Project title is required' });
+    }
+    if (!inquiryData.projectType) {
+      return res.status(400).json({ error: 'Project type is required' });
+    }
+    if (!inquiryData.fullName) {
+      return res.status(400).json({ error: 'Full name is required' });
+    }
+    if (!inquiryData.email) {
+      return res.status(400).json({ error: 'Email is required' });
     }
     
     const inquiry = new FYPInquiry(inquiryData);
