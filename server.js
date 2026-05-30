@@ -284,6 +284,40 @@ const fypInquirySchema = new mongoose.Schema({
 const FYPProject = mongoose.model('FYPProject', fypProjectSchema);
 const FYPInquiry = mongoose.model('FYPInquiry', fypInquirySchema);
 
+
+// Blog Schema
+const blogSchema = new mongoose.Schema({
+  title: { type: String, required: true },
+  slug: { type: String, required: true, unique: true },
+  excerpt: { type: String, required: true },
+  content: { type: String, required: true },
+  category: { type: String, required: true, enum: ['Web Development', 'Mobile Development', 'AI/ML', 'Cloud Computing', 'DevOps', 'Cybersecurity', 'Business & Strategy', 'HR & Culture'] },
+  author: {
+    name: { type: String, required: true },
+    role: { type: String, required: true },
+    avatar: { type: String, required: true },
+    expertise: [{ type: String }]
+  },
+  image: { type: String, required: true },
+  tags: [{ type: String }],
+  readTime: { type: String, required: true },
+  views: { type: Number, default: 0 },
+  likes: { type: Number, default: 0 },
+  comments: [{ 
+    user: String,
+    email: String,
+    comment: String,
+    createdAt: { type: Date, default: Date.now }
+  }],
+  status: { type: String, enum: ['draft', 'published'], default: 'draft' },
+  publishedAt: { type: Date, default: Date.now },
+  createdAt: { type: Date, default: Date.now },
+  updatedAt: { type: Date, default: Date.now }
+});
+
+
+
+
 // Newsletter Schema
 const newsletterSchema = new mongoose.Schema({
   email: { type: String, unique: true },
@@ -300,7 +334,7 @@ const Career = mongoose.model('Career', careerSchema);
 const JobPosition = mongoose.model('JobPosition', jobPositionSchema);
 const Event = mongoose.model('Event', eventSchema);
 const Newsletter = mongoose.model('Newsletter', newsletterSchema);
-
+const Blog = mongoose.model('Blog', blogSchema);
 // ========== MIDDLEWARE ==========
 
 // Authentication Middleware
@@ -1216,6 +1250,145 @@ app.get('/api/fyp/inquiries/stats', adminAuth, async (req, res) => {
   }
 });
 
+// ========== BLOG ROUTES ==========
+
+// Get all published blogs (public)
+app.get('/api/blogs', async (req, res) => {
+  try {
+    const { category, search, page = 1, limit = 9 } = req.query;
+    let query = { status: 'published' };
+    
+    if (category && category !== 'all') {
+      query.category = category;
+    }
+    
+    if (search) {
+      query.$or = [
+        { title: { $regex: search, $options: 'i' } },
+        { excerpt: { $regex: search, $options: 'i' } },
+        { tags: { $in: [new RegExp(search, 'i')] } }
+      ];
+    }
+    
+    const total = await Blog.countDocuments(query);
+    const blogs = await Blog.find(query)
+      .sort({ publishedAt: -1 })
+      .skip((parseInt(page) - 1) * parseInt(limit))
+      .limit(parseInt(limit));
+    
+    res.json({
+      blogs,
+      total,
+      page: parseInt(page),
+      totalPages: Math.ceil(total / parseInt(limit))
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Get single blog by slug (public)
+app.get('/api/blogs/:slug', async (req, res) => {
+  try {
+    const blog = await Blog.findOne({ slug: req.params.slug, status: 'published' });
+    if (!blog) return res.status(404).json({ error: 'Blog not found' });
+    
+    // Increment views
+    blog.views += 1;
+    await blog.save();
+    
+    res.json(blog);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Get all blogs (Admin only)
+app.get('/api/admin/blogs', adminAuth, async (req, res) => {
+  try {
+    const blogs = await Blog.find().sort({ createdAt: -1 });
+    res.json(blogs);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Get single blog (Admin only)
+app.get('/api/admin/blogs/:id', adminAuth, async (req, res) => {
+  try {
+    const blog = await Blog.findById(req.params.id);
+    if (!blog) return res.status(404).json({ error: 'Blog not found' });
+    res.json(blog);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Create blog (Admin only)
+app.post('/api/admin/blogs', adminAuth, async (req, res) => {
+  try {
+    const blog = new Blog(req.body);
+    await blog.save();
+    res.status(201).json(blog);
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// Update blog (Admin only)
+app.put('/api/admin/blogs/:id', adminAuth, async (req, res) => {
+  try {
+    const blog = await Blog.findByIdAndUpdate(
+      req.params.id, 
+      { ...req.body, updatedAt: new Date() }, 
+      { new: true }
+    );
+    if (!blog) return res.status(404).json({ error: 'Blog not found' });
+    res.json(blog);
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// Delete blog (Admin only)
+app.delete('/api/admin/blogs/:id', adminAuth, async (req, res) => {
+  try {
+    const blog = await Blog.findByIdAndDelete(req.params.id);
+    if (!blog) return res.status(404).json({ error: 'Blog not found' });
+    res.json({ success: true });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// Like a blog (public)
+app.post('/api/blogs/:id/like', async (req, res) => {
+  try {
+    const blog = await Blog.findById(req.params.id);
+    if (!blog) return res.status(404).json({ error: 'Blog not found' });
+    
+    blog.likes += 1;
+    await blog.save();
+    res.json({ likes: blog.likes });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Add comment (public)
+app.post('/api/blogs/:id/comments', async (req, res) => {
+  try {
+    const blog = await Blog.findById(req.params.id);
+    if (!blog) return res.status(404).json({ error: 'Blog not found' });
+    
+    blog.comments.push(req.body);
+    await blog.save();
+    res.json({ comments: blog.comments });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ========== STATS ROUTE (Admin) ==========
 app.get('/api/stats', adminAuth, async (req, res) => {
   const stats = {
@@ -1232,6 +1405,7 @@ app.get('/api/stats', adminAuth, async (req, res) => {
     fypProjects: await FYPProject.countDocuments(),
     fypInquiries: await FYPInquiry.countDocuments(),
     serviceInquiries: await ServiceInquiry.countDocuments(),
+    blogs: await Blog.countDocuments(),
   };
   res.json(stats);
 });
