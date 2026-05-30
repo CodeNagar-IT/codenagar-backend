@@ -110,9 +110,10 @@ const productSchema = new mongoose.Schema({
   createdAt: { type: Date, default: Date.now }
 });
 
-// Order Schema
-const orderSchema = new mongoose.Schema({
-  userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+// Reservation Schema (In-Store Pickup)
+const reservationSchema = new mongoose.Schema({
+  reservationCode: { type: String, unique: true, required: true },
+  userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
   items: [{
     productId: { type: mongoose.Schema.Types.ObjectId, ref: 'Product' },
     name: String,
@@ -120,15 +121,25 @@ const orderSchema = new mongoose.Schema({
     quantity: Number
   }],
   total: { type: Number, required: true },
-  shippingAddress: {
-    street: String,
-    city: String,
-    zipCode: String,
-    country: String
+  customerInfo: {
+    fullName: { type: String, required: true },
+    email: { type: String, required: true },
+    phone: { type: String, required: true }
   },
-  status: { type: String, default: 'pending' },
+  pickupLocation: { type: String, default: "CodeNagar Store, Muzaffarabad City" },
+  status: { 
+    type: String, 
+    enum: ['pending_pickup', 'ready_for_pickup', 'completed', 'cancelled', 'expired'],
+    default: 'pending_pickup'
+  },
+  reservationExpiry: { type: Date, default: () => new Date(+new Date() + 48*60*60*1000) }, // 48 hours
   createdAt: { type: Date, default: Date.now }
 });
+
+// Generate unique reservation code function
+function generateReservationCode() {
+  return 'RES-' + Math.random().toString(36).substring(2, 10).toUpperCase();
+}
 
 // Contact Message Schema
 const contactSchema = new mongoose.Schema({
@@ -282,7 +293,7 @@ const newsletterSchema = new mongoose.Schema({
 const User = mongoose.model('User', userSchema);
 const CourseApp = mongoose.model('CourseApp', courseAppSchema);
 const Product = mongoose.model('Product', productSchema);
-const Order = mongoose.model('Order', orderSchema);
+const Reservation = mongoose.model('Reservation', reservationSchema);
 const Contact = mongoose.model('Contact', contactSchema);
 const Portfolio = mongoose.model('Portfolio', portfolioSchema);
 const Career = mongoose.model('Career', careerSchema);
@@ -506,31 +517,130 @@ app.delete('/api/products/:id', adminAuth, async (req, res) => {
   res.json({ success: true });
 });
 
-// ========== ORDER ROUTES ==========
-app.post('/api/orders', auth, async (req, res) => {
+
+// ========== RESERVATION ROUTES ==========
+
+// Create reservation (Customer)
+app.post('/api/reservations', auth, async (req, res) => {
   try {
-    const order = new Order({ ...req.body, userId: req.user._id });
-    await order.save();
-    res.status(201).json(order);
+    const reservationData = {
+      ...req.body,
+      userId: req.user._id,
+      reservationCode: generateReservationCode()
+    };
+    const reservation = new Reservation(reservationData);
+    await reservation.save();
+    
+    // Optional: Send confirmation email
+    // await sendReservationConfirmation(reservation);
+    
+    res.status(201).json({ 
+      success: true, 
+      reservationCode: reservation.reservationCode,
+      message: 'Reservation created successfully!'
+    });
+  } catch (err) {
+    console.error('Error creating reservation:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Get user's reservations
+app.get('/api/reservations/my', auth, async (req, res) => {
+  try {
+    const reservations = await Reservation.find({ userId: req.user._id }).sort({ createdAt: -1 });
+    res.json(reservations);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Get all reservations (Admin only)
+app.get('/api/reservations/all', adminAuth, async (req, res) => {
+  try {
+    const reservations = await Reservation.find().populate('userId', 'name email').sort({ createdAt: -1 });
+    res.json(reservations);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Get single reservation (Admin only)
+app.get('/api/reservations/:id', adminAuth, async (req, res) => {
+  try {
+    const reservation = await Reservation.findById(req.params.id).populate('userId', 'name email');
+    if (!reservation) return res.status(404).json({ error: 'Reservation not found' });
+    res.json(reservation);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Update reservation status (Admin only)
+app.put('/api/reservations/:id/status', adminAuth, async (req, res) => {
+  try {
+    const { status } = req.body;
+    const reservation = await Reservation.findByIdAndUpdate(
+      req.params.id, 
+      { status }, 
+      { new: true }
+    );
+    if (!reservation) return res.status(404).json({ error: 'Reservation not found' });
+    res.json(reservation);
   } catch (err) {
     res.status(400).json({ error: err.message });
   }
 });
 
-app.get('/api/orders', auth, async (req, res) => {
-  const orders = await Order.find({ userId: req.user._id }).sort({ createdAt: -1 });
-  res.json(orders);
+// Cancel reservation (Customer)
+app.put('/api/reservations/:id/cancel', auth, async (req, res) => {
+  try {
+    const reservation = await Reservation.findOne({ 
+      _id: req.params.id, 
+      userId: req.user._id,
+      status: 'pending_pickup'
+    });
+    if (!reservation) {
+      return res.status(404).json({ error: 'Reservation not found or cannot be cancelled' });
+    }
+    reservation.status = 'cancelled';
+    await reservation.save();
+    res.json({ success: true, message: 'Reservation cancelled successfully' });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
 });
 
-app.get('/api/orders/all', adminAuth, async (req, res) => {
-  const orders = await Order.find().populate('userId', 'name email').sort({ createdAt: -1 });
-  res.json(orders);
+// Delete reservation (Admin only)
+app.delete('/api/reservations/:id', adminAuth, async (req, res) => {
+  try {
+    await Reservation.findByIdAndDelete(req.params.id);
+    res.json({ success: true });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
 });
 
-app.put('/api/orders/:id', adminAuth, async (req, res) => {
-  const order = await Order.findByIdAndUpdate(req.params.id, { status: req.body.status }, { new: true });
-  res.json(order);
-});
+// Auto-expire expired reservations (Run every hour)
+const autoExpireReservations = async () => {
+  try {
+    const result = await Reservation.updateMany(
+      { 
+        status: 'pending_pickup', 
+        reservationExpiry: { $lt: new Date() } 
+      },
+      { status: 'expired' }
+    );
+    if (result.modifiedCount > 0) {
+      console.log(`✅ Auto-expired ${result.modifiedCount} reservations`);
+    }
+  } catch (err) {
+    console.error('Error auto-expiring reservations:', err);
+  }
+};
+
+// Run every hour
+setInterval(autoExpireReservations, 60 * 60 * 1000);
 
 // ========== CONTACT ROUTES ==========
 app.post('/api/contact', async (req, res) => {
@@ -1110,8 +1220,8 @@ app.get('/api/fyp/inquiries/stats', adminAuth, async (req, res) => {
 app.get('/api/stats', adminAuth, async (req, res) => {
   const stats = {
     users: await User.countDocuments(),
-    orders: await Order.countDocuments(),
     products: await Product.countDocuments(),
+    reservations: await Reservation.countDocuments(),
     applications: await CourseApp.countDocuments(),
     messages: await Contact.countDocuments(),
     careers: await Career.countDocuments(),
@@ -1120,7 +1230,7 @@ app.get('/api/stats', adminAuth, async (req, res) => {
     portfolio: await Portfolio.countDocuments(),
     jobs: await JobPosition.countDocuments(),
     fypProjects: await FYPProject.countDocuments(),
-fypInquiries: await FYPInquiry.countDocuments(),
+    fypInquiries: await FYPInquiry.countDocuments(),
     serviceInquiries: await ServiceInquiry.countDocuments(),
   };
   res.json(stats);
