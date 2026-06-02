@@ -152,7 +152,7 @@ const contactSchema = new mongoose.Schema({
   createdAt: { type: Date, default: Date.now }
 });
 
-// Portfolio Schema
+// In server.js, update the portfolioSchema (around line 180)
 const portfolioSchema = new mongoose.Schema({
   title: { type: String, required: true },
   slug: { type: String, required: true, unique: true },
@@ -165,8 +165,8 @@ const portfolioSchema = new mongoose.Schema({
   technologies: [{ type: String }],
   image: { type: String, required: true },
   gallery: [{ type: String }],
-  liveUrl: String,
-  githubUrl: String,
+  githubUrl: { type: String },
+  demoUrl: { type: String },  // Add this for Google Drive demo video
   featured: { type: Boolean, default: false },
   completedDate: { type: Date, required: true },
   createdAt: { type: Date, default: Date.now }
