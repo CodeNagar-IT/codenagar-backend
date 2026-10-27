@@ -1610,8 +1610,13 @@ app.get('/api/health', (req, res) => {
 
 // ========== INITIAL COURSES (Batch 1) ==========
 const initializeCourses = async () => {
-  const count = await Course.countDocuments();
-  if (count === 0) {
+  try {
+    const count = await Course.countDocuments();
+    if (count > 0) {
+      console.log(`ℹ️ Courses already exist (${count}), skipping seed`);
+      return;
+    }
+
     const courses = [
       {
         title: "Full Stack Development",
@@ -1725,17 +1730,16 @@ const initializeCourses = async () => {
         assessments: ["Weekly MCQ quizzes", "SQL & Python exercises", "Dashboard assignments", "Final exam"],
         finalProject: "Build a complete analytics dashboard using a real dataset with actionable insights."
       }
-    ];}
-    try {
+    ];
+
     await Course.insertMany(courses);
-    console.log('✅ Batch 1 courses added');
+    console.log(`✅ Seeded ${courses.length} courses`);
   } catch (err) {
-  console.error('Seed failed (non-fatal):', err.message);
-}
+    console.error('Course seed failed (non-fatal):', err.message);
+  }
 };
-initializeCourses().catch(err =>
-  console.error('Seed failed (non-fatal):', err.message)
-);
+
+initializeCourses();
 
 const initializeProducts = async () => {
   const count = await Product.countDocuments();
