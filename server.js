@@ -82,17 +82,52 @@ const userSchema = new mongoose.Schema({
   createdAt: { type: Date, default: Date.now }
 });
 
+const courseSchema = new mongoose.Schema({
+  title: { type: String, required: true },
+  slug: { type: String, required: true, unique: true },
+  description: { type: String, required: true },
+  shortDescription: { type: String, required: true },
+  duration: { type: String, default: "2 Months" },
+  batchNumber: { type: Number, default: 1 },
+  mode: { type: String, default: "Online • Self-Paced" },
+  level: { type: String, enum: ["Beginner", "Intermediate", "Advanced", "Beginner to Advanced"], default: "Beginner to Advanced" },
+  icon: { type: String, default: "Code" },
+  color: { type: String, default: "from-blue-500 to-cyan-500" },
+  features: [{ type: String }],
+  syllabus: [{ type: String }],
+  outcomes: [{ type: String }],
+  tools: [{ type: String }],
+  assessments: [{ type: String }],
+  finalProject: { type: String, default: "" },
+  registrationStartDate: { type: Date, default: new Date("2026-11-01T00:00:00") },
+  registrationOpen: { type: Boolean, default: true },
+  enrolledCount: { type: Number, default: 0 },
+  isActive: { type: Boolean, default: true },
+  createdAt: { type: Date, default: Date.now }
+});
+
 // Course Application Schema
 const courseAppSchema = new mongoose.Schema({
+  registrationNumber: { type: String, unique: true },
+  courseId: { type: mongoose.Schema.Types.ObjectId, ref: 'Course' },
+  courseTitle: { type: String, required: true },
+  batchNumber: { type: Number, default: 1 },
   fullName: { type: String, required: true },
   email: { type: String, required: true },
   phone: { type: String, required: true },
-  course: { type: String, required: true },
-  education: String,
-  experience: String,
-  message: String,
+  city: { type: String, required: true },
+  age: { type: Number },
+  education: { type: String },
+  experience: { type: String },
+  motivation: { type: String },
+  commitment: { type: String }, // e.g. "5-10 hours/week"
+  message: { type: String },
   userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
-  status: { type: String, default: 'pending' },
+  status: { 
+    type: String, 
+    enum: ['pending', 'approved', 'rejected', 'enrolled', 'completed'],
+    default: 'pending' 
+  },
   appliedAt: { type: Date, default: Date.now }
 });
 
@@ -326,6 +361,7 @@ const newsletterSchema = new mongoose.Schema({
 
 const User = mongoose.model('User', userSchema);
 const CourseApp = mongoose.model('CourseApp', courseAppSchema);
+const Course = mongoose.model('Course', courseSchema);
 const Product = mongoose.model('Product', productSchema);
 const Reservation = mongoose.model('Reservation', reservationSchema);
 const Contact = mongoose.model('Contact', contactSchema);
@@ -490,6 +526,161 @@ app.put('/api/users/password', auth, async (req, res) => {
 });
 
 // ========== COURSE ROUTES ==========
+
+// ========== COURSE (BATCH 1) ROUTES ==========
+
+// Get all active courses (public)
+app.get('/api/courses/list', async (req, res) => {
+  try {
+    const courses = await Course.find({ isActive: true }).sort({ createdAt: 1 });
+    res.json(courses);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Get single course by slug (public)
+app.get('/api/courses/list/:slug', async (req, res) => {
+  try {
+    const course = await Course.findOne({ slug: req.params.slug, isActive: true });
+    if (!course) return res.status(404).json({ error: 'Course not found' });
+    res.json(course);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Register for a course (public)
+app.post('/api/courses/register', async (req, res) => {
+  try {
+    const { courseId, fullName, email, phone, city } = req.body;
+
+    if (!courseId || !fullName || !email || !phone || !city) {
+      return res.status(400).json({ error: 'Required fields missing' });
+    }
+
+    const course = await Course.findById(courseId);
+    if (!course) return res.status(404).json({ error: 'Course not found' });
+
+    // Check registration is open (only allow after Nov 1)
+    const now = new Date();
+    if (now < new Date(course.registrationStartDate)) {
+      return res.status(400).json({ 
+        error: `Registration opens on ${new Date(course.registrationStartDate).toLocaleDateString()}` 
+      });
+    }
+
+    // Prevent duplicate registration (same email + course)
+    const existing = await CourseApp.findOne({ email, courseId });
+    if (existing) {
+      return res.status(400).json({ 
+        error: 'You have already registered for this course.',
+        registrationNumber: existing.registrationNumber
+      });
+    }
+
+    // Generate registration number CN-B1-XXXX
+    const count = await CourseApp.countDocuments({ batchNumber: 1 });
+    const regNumber = `CN-B1-${String(count + 1).padStart(4, '0')}`;
+
+    const application = new CourseApp({
+      ...req.body,
+      courseTitle: course.title,
+      batchNumber: course.batchNumber || 1,
+      registrationNumber: regNumber,
+      status: 'pending'
+    });
+    await application.save();
+
+    // Increment enrolled count
+    course.enrolledCount = (course.enrolledCount || 0) + 1;
+    await course.save();
+
+    res.status(201).json({ 
+      success: true, 
+      message: 'Registration successful!',
+      registrationNumber: regNumber
+    });
+  } catch (err) {
+    console.error('Registration error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Get my registrations (auth)
+app.get('/api/courses/my-registrations', auth, async (req, res) => {
+  try {
+    const regs = await CourseApp.find({ email: req.user.email }).sort({ appliedAt: -1 });
+    res.json(regs);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ========== ADMIN COURSE ROUTES ==========
+
+// List all courses (admin)
+app.get('/api/admin/courses', adminAuth, async (req, res) => {
+  try {
+    const courses = await Course.find().sort({ createdAt: 1 });
+    res.json(courses);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Create course (admin)
+app.post('/api/admin/courses', adminAuth, async (req, res) => {
+  try {
+    const course = new Course(req.body);
+    await course.save();
+    res.status(201).json(course);
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// Update course (admin)
+app.put('/api/admin/courses/:id', adminAuth, async (req, res) => {
+  try {
+    const course = await Course.findByIdAndUpdate(req.params.id, req.body, { new: true });
+    res.json(course);
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// Delete course (admin)
+app.delete('/api/admin/courses/:id', adminAuth, async (req, res) => {
+  try {
+    await Course.findByIdAndDelete(req.params.id);
+    res.json({ success: true });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// All registrations (admin)
+app.get('/api/admin/courses/registrations', adminAuth, async (req, res) => {
+  try {
+    const regs = await CourseApp.find().sort({ appliedAt: -1 }).populate('courseId', 'title slug');
+    res.json(regs);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Update registration status (admin)
+app.put('/api/admin/courses/registrations/:id/status', adminAuth, async (req, res) => {
+  try {
+    const { status } = req.body;
+    const reg = await CourseApp.findByIdAndUpdate(req.params.id, { status }, { new: true });
+    res.json(reg);
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
 app.post('/api/courses/apply', async (req, res) => {
   try {
     const application = new CourseApp(req.body);
@@ -1416,6 +1607,131 @@ app.get('/api/health', (req, res) => {
 });
 
 // ========== INITIAL PRODUCTS ==========
+
+// ========== INITIAL COURSES (Batch 1) ==========
+const initializeCourses = async () => {
+  const count = await Course.countDocuments();
+  if (count === 0) {
+    const courses = [
+      {
+        title: "Full Stack Development",
+        slug: "full-stack-development",
+        shortDescription: "Master web development from frontend to backend with hands-on projects.",
+        description: "A complete 2-month self-paced online program covering the entire web development stack. Learn through structured handouts, slides, video tutorials, assessments, and quizzes — finishing with a real-world final project.",
+        level: "Beginner to Advanced",
+        icon: "Code",
+        color: "from-blue-500 to-cyan-500",
+        features: ["100% Free", "Online Self-Paced", "Handouts & Slides", "Video Tutorials", "Assessments & Quizzes", "Final Project"],
+        syllabus: [
+          "HTML5 & CSS3 Fundamentals",
+          "JavaScript & ES6+",
+          "React.js & Component Design",
+          "Node.js & Express APIs",
+          "MongoDB & Database Design",
+          "Authentication & Deployment"
+        ],
+        outcomes: [
+          "Build complete full-stack applications",
+          "Design responsive, modern UIs",
+          "Create REST APIs with Node.js",
+          "Work with databases effectively",
+          "Deploy production-ready apps"
+        ],
+        tools: ["VS Code", "React", "Node.js", "MongoDB", "Git", "Postman"],
+        assessments: ["Weekly quizzes (MCQ)", "Practice assignments", "Mid-course assessment", "Final exam"],
+        finalProject: "Build and deploy a complete full-stack web application (e.g. e-commerce or social platform)."
+      },
+      {
+        title: "Mobile App Development",
+        slug: "mobile-app-development",
+        shortDescription: "Build cross-platform mobile apps for iOS and Android from scratch.",
+        description: "Learn mobile app development in 2 months through self-paced online materials. Cover cross-platform frameworks, UI design, APIs, and publish your first app as a final project.",
+        level: "Beginner to Intermediate",
+        icon: "Smartphone",
+        color: "from-green-500 to-emerald-500",
+        features: ["100% Free", "Online Self-Paced", "Handouts & Slides", "Video Tutorials", "Assessments & Quizzes", "Final Project"],
+        syllabus: [
+          "Mobile UI/UX Fundamentals",
+          "React Native Basics",
+          "Navigation & State Management",
+          "Working with APIs & Firebase",
+          "Device Features (Camera, GPS)",
+          "App Testing & Publishing"
+        ],
+        outcomes: [
+          "Build cross-platform mobile apps",
+          "Design smooth mobile interfaces",
+          "Integrate Firebase & REST APIs",
+          "Use native device features",
+          "Publish to app stores"
+        ],
+        tools: ["React Native", "Expo", "Firebase", "VS Code", "Android Studio", "Xcode"],
+        assessments: ["Weekly MCQ quizzes", "Hands-on coding tasks", "Mid-course project", "Final exam"],
+        finalProject: "Build and publish a functional mobile app (e.g. to-do app, weather app, or chat app)."
+      },
+      {
+        title: "Artificial Intelligence & Machine Learning",
+        slug: "artificial-intelligence-machine-learning",
+        shortDescription: "Learn AI and ML fundamentals with Python and real-world datasets.",
+        description: "A 2-month self-paced online journey into AI and ML. Learn the theory and practice of machine learning through structured notes, videos, hands-on notebooks, quizzes, and a final AI project.",
+        level: "Intermediate to Advanced",
+        icon: "Brain",
+        color: "from-purple-500 to-pink-500",
+        features: ["100% Free", "Online Self-Paced", "Handouts & Slides", "Video Tutorials", "Assessments & Quizzes", "Final Project"],
+        syllabus: [
+          "Python for AI/ML",
+          "Statistics & Data Preprocessing",
+          "Supervised Learning Algorithms",
+          "Unsupervised Learning",
+          "Neural Networks & Deep Learning",
+          "Model Evaluation & Deployment"
+        ],
+        outcomes: [
+          "Understand core ML algorithms",
+          "Build predictive models in Python",
+          "Prepare and clean real datasets",
+          "Train neural networks",
+          "Deploy ML models"
+        ],
+        tools: ["Python", "Pandas", "NumPy", "Scikit-learn", "TensorFlow", "Jupyter"],
+        assessments: ["Weekly quizzes", "Coding notebooks", "Model-building assignments", "Final exam"],
+        finalProject: "Develop and present a complete ML model (e.g. prediction, classification, or recommendation system)."
+      },
+      {
+        title: "Data Analytics",
+        slug: "data-analytics",
+        shortDescription: "Turn raw data into insights with analysis, visualization, and reporting.",
+        description: "Master data analytics in 2 months through self-paced online content. Learn to collect, clean, visualize, and interpret data — culminating in a full analytics dashboard project.",
+        level: "Beginner to Intermediate",
+        icon: "Database",
+        color: "from-yellow-500 to-orange-500",
+        features: ["100% Free", "Online Self-Paced", "Handouts & Slides", "Video Tutorials", "Assessments & Quizzes", "Final Project"],
+        syllabus: [
+          "Introduction to Data Analytics",
+          "Excel & Google Sheets for Analysts",
+          "SQL for Data Querying",
+          "Python for Data Analysis (Pandas)",
+          "Data Visualization (Matplotlib, Power BI)",
+          "Reporting & Storytelling with Data"
+        ],
+        outcomes: [
+          "Clean and prepare data effectively",
+          "Write SQL queries confidently",
+          "Analyze data with Python & Pandas",
+          "Build interactive dashboards",
+          "Present insights clearly"
+        ],
+        tools: ["Excel", "SQL", "Python", "Pandas", "Power BI", "Tableau"],
+        assessments: ["Weekly MCQ quizzes", "SQL & Python exercises", "Dashboard assignments", "Final exam"],
+        finalProject: "Build a complete analytics dashboard using a real dataset with actionable insights."
+      }
+    ];
+    await Course.insertMany(courses);
+    console.log('✅ Batch 1 courses added');
+  }
+};
+initializeCourses();
+
 const initializeProducts = async () => {
   const count = await Product.countDocuments();
   if (count === 0) {
