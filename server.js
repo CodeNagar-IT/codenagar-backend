@@ -1618,7 +1618,7 @@ const initializeCourses = async () => {
         slug: "full-stack-development",
         shortDescription: "Master web development from frontend to backend with hands-on projects.",
         description: "A complete 2-month self-paced online program covering the entire web development stack. Learn through structured handouts, slides, video tutorials, assessments, and quizzes — finishing with a real-world final project.",
-        level: "Beginner to Advanced",
+        level: "Advanced",
         icon: "Code",
         color: "from-blue-500 to-cyan-500",
         features: ["100% Free", "Online Self-Paced", "Handouts & Slides", "Video Tutorials", "Assessments & Quizzes", "Final Project"],
@@ -1646,7 +1646,7 @@ const initializeCourses = async () => {
         slug: "mobile-app-development",
         shortDescription: "Build cross-platform mobile apps for iOS and Android from scratch.",
         description: "Learn mobile app development in 2 months through self-paced online materials. Cover cross-platform frameworks, UI design, APIs, and publish your first app as a final project.",
-        level: "Beginner to Intermediate",
+        level: "Intermediate",
         icon: "Smartphone",
         color: "from-green-500 to-emerald-500",
         features: ["100% Free", "Online Self-Paced", "Handouts & Slides", "Video Tutorials", "Assessments & Quizzes", "Final Project"],
@@ -1674,7 +1674,7 @@ const initializeCourses = async () => {
         slug: "artificial-intelligence-machine-learning",
         shortDescription: "Learn AI and ML fundamentals with Python and real-world datasets.",
         description: "A 2-month self-paced online journey into AI and ML. Learn the theory and practice of machine learning through structured notes, videos, hands-on notebooks, quizzes, and a final AI project.",
-        level: "Intermediate to Advanced",
+        level: "Advanced",
         icon: "Brain",
         color: "from-purple-500 to-pink-500",
         features: ["100% Free", "Online Self-Paced", "Handouts & Slides", "Video Tutorials", "Assessments & Quizzes", "Final Project"],
@@ -1702,7 +1702,7 @@ const initializeCourses = async () => {
         slug: "data-analytics",
         shortDescription: "Turn raw data into insights with analysis, visualization, and reporting.",
         description: "Master data analytics in 2 months through self-paced online content. Learn to collect, clean, visualize, and interpret data — culminating in a full analytics dashboard project.",
-        level: "Beginner to Intermediate",
+        level: "Intermediate",
         icon: "Database",
         color: "from-yellow-500 to-orange-500",
         features: ["100% Free", "Online Self-Paced", "Handouts & Slides", "Video Tutorials", "Assessments & Quizzes", "Final Project"],
@@ -1725,12 +1725,17 @@ const initializeCourses = async () => {
         assessments: ["Weekly MCQ quizzes", "SQL & Python exercises", "Dashboard assignments", "Final exam"],
         finalProject: "Build a complete analytics dashboard using a real dataset with actionable insights."
       }
-    ];
+    ];}
+    try {
     await Course.insertMany(courses);
     console.log('✅ Batch 1 courses added');
-  }
+  } catch (err) {
+  console.error('Seed failed (non-fatal):', err.message);
+}
 };
-initializeCourses();
+initializeCourses().catch(err =>
+  console.error('Seed failed (non-fatal):', err.message)
+);
 
 const initializeProducts = async () => {
   const count = await Product.countDocuments();
